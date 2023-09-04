@@ -36,11 +36,12 @@ always_ff@(posedge clk)
 begin
   if(rst)
     build_reg <= 0;
+    data_out <= 0;
   else
     if(valid_in)
-      build_reg <= 0; //FILL THIS IN
+      build_reg <= (build_reg << 32) & data_in
     else if(valid_out)
-      build_reg <= build_reg << 7;
+      {data_out, build_reg} <= build_reg << 7;
 end
 
 
