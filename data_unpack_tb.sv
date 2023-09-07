@@ -1,113 +1,131 @@
+
+
 module data_unpack_tb;
+
+localparam LOOPS = 10000;
+
+typedef logic [$ceil(32*LOOPS/7):0][6:0] packed_8;
 
 logic clk;
 logic rst;
-  
+
 wire ready_out;
 logic valid_in;
 logic [31:0] data_in;
 logic sop_in;
 logic eop_in;
-  
+
 wire valid_out;
 wire [6:0] data_out;
 wire sop_out;
 wire eop_out;
 
 integer seed = 1;
-integer EX_LOOPS = 10;
-integer LOOPS = 1000;
-integer out_counts;
-logic eop_delay;
-integer END_LOOP = $urandom_range(0,1000);
 
-logic [223:0] data_in_source;
-logic [223:0] data_out_source;
+logic eop_delay;
+logic sop_check;
+logic eop_check;
+
+logic [7] out_queue [$];
+logic [32] in_queue [$];
+
+packed_8 compare_array;
 
 data_unpack DUT(.*);
+
+initial
+begin : CLOCK_RESET_CONTROL
+
+    clk = 'b0;
+    rst = 'b1;
+    #50 rst = 'b0;
+
+    repeat(LOOPS) 
+    begin
+        @(posedge clk);
+        wait(valid_in);
+    end
+    data_compare(in_queue, out_queue);
+    $finish;
+end
 
 always
 #5 clk = ~clk;
 
-initial begin
-    $dumpfile("waveform.vcd");
-    $dumpvars(0, DUT);
-
-    $display("Running %d loops, ending at loop %d", LOOPS, END_LOOP);
-
-    clk = 'b0;
-    rst = 'b0;
-    #50 rst = 'b1;
-
-    for(integer i=0; i<EX_LOOPS; i++) begin
-
-        wait(ready_out);
-    
-        for(integer j=0; j<LOOPS; j++) begin
-
-            if(j % 7 == 0) begin
-                data_in_source = {32{$urandom(seed)}};
-                data_out_source = data_in_source;
-            
-            end
-
-            if(j == 0) sop_in = 1;
-            else sop_in = 0;
-
-            if(j == END_LOOP-1) eop_in = 1;
-            else eop_in = 0;
-            
-            data_in = data_in_source[31:0];
-            
-            if(j < END_LOOP) begin
-                valid_in = 1;
-
-                out_counts = 0;
-
-                wait(!ready_out);
-                valid_in = 0;
-
-                while(ready_out == 0) begin
-                    wait(valid_out); 
-                    @(posedge clk);
-
-                    if(valid_out) begin
-                        if(sop_in & (out_counts == 0)) begin
-                            assert(sop_out);
-                        end
-
-                        assert(data_out == data_out_source[6:0]);
-
-                        out_counts++;
-
-                        data_out_source = data_out_source >> 7;
-                    end
-                    assert(out_counts < 6);
-                    if(ready_out == 0) 
-                        eop_delay = eop_out;
-                end
-                if(eop_in) begin
-                    assert(eop_delay);
-                end
-                
-                data_in_source = data_in_source >> 32;
-
-            end
-            else assert(!valid_out);
-
-            // WAIT random time period before next
-            #($urandom_range(0,100));
-            
-        end
-
-    #($urandom_range(0,100));
-    end
-    
-    #100;
-$finish;
-
+always @(posedge clk)
+begin : OUTPUT_MONITOR
+    if(valid_out)
+        out_queue.push_back(data_out);
 end
 
+always @(posedge clk)
+begin : INPUT_CONTROL
+    if(ready_out) 
+    begin
+        #($urandom_range(0,100));
+        valid_in = 1;
+        data_in = $urandom(seed);
+        in_queue.push_back(data_in);
+        if(10 > $urandom_range(0,100))
+            sop_in = 1;
+        if(10 > $urandom_range(0,100))
+            eop_in = 1;
+        wait(~ready_out);
+    end 
+    else 
+    begin
+        valid_in = 0;
+        sop_in = 0;
+        eop_in = 0;
+    end
+end
 
+always @(posedge clk)
+begin : SOP_EOP_SAVED
+    if(valid_in)
+    begin
+        sop_check = sop_in;
+        eop_check = eop_in;
+    end
+end
+
+always
+begin : SOP_CHECKER
+    wait(valid_in)
+    @(posedge clk)
+    wait(valid_out)
+    if(sop_out)
+        assert(sop_check);
+end
+
+always
+begin : EOP_CHECKER
+    wait(valid_in)
+    @(posedge clk)
+    while(!ready_out)
+    begin
+        if(valid_out)
+            eop_delay = eop_out;
+        @(posedge clk);
+    end
+    if(eop_delay)
+        assert(eop_check);
+end
+
+final
+begin : PRINT_DATA
+    /*
+    $display("inputs: ");
+    while (in_queue.size()) begin
+        $write("%b ", in_queue.pop_front());
+    end
+    $display("");
+    $displayb("outputs: ");
+    while (out_queue.size()) begin
+        $write("%b ", out_queue.pop_front());
+    end
+    $display("");
+    */
+end
 
 endmodule
