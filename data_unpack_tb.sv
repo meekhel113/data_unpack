@@ -28,6 +28,7 @@ logic eop_check;
 
 logic [7] out_queue [$];
 logic [32] in_queue [$];
+logic [1] eop_queue [$];
 
 packed_8 compare_array;
 
@@ -45,7 +46,7 @@ begin : CLOCK_RESET_CONTROL
         @(posedge clk);
         wait(valid_in);
     end
-    data_compare(in_queue, out_queue);
+    data_compare(in_queue, out_queue, eop_queue);
     $finish;
 end
 
@@ -54,8 +55,10 @@ always
 
 always @(posedge clk)
 begin : OUTPUT_MONITOR
-    if(valid_out)
+    if(valid_out) begin
         out_queue.push_back(data_out);
+        eop_queue.push_back(eop_out);
+    end
 end
 
 always @(posedge clk)

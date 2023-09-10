@@ -3,14 +3,13 @@
 task data_compare
 (
     input [32] in_queue [$],
-    input [7] out_queue [$]
+    input [7] out_queue [$],
+    input eop_queue[$]
 );
-
-logic [32] local_in [$];
-logic [7] local_out [$];
 
 logic [31:0] logic_in_single;
 logic [6:0] logic_out_single;
+logic       eop_single;
 
 integer in_count;
 integer out_count;
@@ -18,13 +17,14 @@ integer out_count;
 in_count = 32;
 out_count = 7;
 
-while (local_out.size() > 0) 
+while (out_queue.size() > 0) 
 begin
-    if(in_count == 32) begin
+    if( (in_count == 32) || eop_single) begin
         in_count = 0;
         logic_in_single = in_queue.pop_front();
     end
-    if(out_count == 7) begin
+    if((out_count == 7) || eop_single) begin
+        eop_single = eop_queue.pop_front();
         out_count = 0;
         logic_out_single = out_queue.pop_front();
     end
