@@ -1,19 +1,19 @@
 // Code your design here
 module data_unpack
 (
-  input wire clk,
+  input wire clk,     // System block
   input wire rst,     // Assuming active high reset
   
-  output logic ready_out, // Can be used to back pressure the input data stream
-  input wire valid_in,
-  input wire [31:0] data_in,
-  input wire sop_in,
-  input wire eop_in,
+  output logic ready_out,     // Can be used to back pressure the input data stream
+  input wire valid_in,        // Signals when data_in is valid and ready to be accepted
+  input wire [31:0] data_in,  // Input data stream, 32 bits
+  input wire sop_in,          // Signals start of packet for input stream
+  input wire eop_in,          // Signals end of packet for input stream
 
-  output logic valid_out,
-  output logic [6:0] data_out,
-  output logic sop_out,
-  output logic eop_out
+  output logic valid_out,       // Raised when data_out is valid
+  output logic [6:0] data_out,  // Output data_stream (7 bits)
+  output logic sop_out,         // Raised on the first packet 
+  output logic eop_out          // Raised on the last packet
 );
   
   logic first_packet;
@@ -30,10 +30,12 @@ module data_unpack
               $time, valid_in, ready_out, valid_out, data_in, data_out, sop_out, eop_out, restart);
   */
 
-  assign sop_out = first_packet & sop_reg;
+  assign sop_out = first_packet & sop_reg; 
   assign eop_out = last_packet & eop_reg;
-  assign valid_ready = valid_in & ready_out;
+  assign valid_ready = valid_in & ready_out;    // Ready if the data is valid and gearbox is ready
 
+
+  // Instantiation of gearbox, input 32 and output 7
   gearbox # (
     .IN_WIDTH  (32 ),
     .OUT_WIDTH (7  )
@@ -44,10 +46,12 @@ module data_unpack
     .*
   );
 
+  // Module is ready when the gearbox is not outputting data, or an eop is not in effect
   assign ready_out = ~valid_out & ~restart;
 
+  // Register sop and eop in signals for output usage
   always_ff@(posedge clk)
-  begin
+  begin : PACKET_FLAGS
     if(rst) 
     begin
       eop_reg = '0;
@@ -61,6 +65,7 @@ module data_unpack
       end
   end
 
+  // If an eop is received, the gearbox is reset to initial state
   always_ff@(posedge clk)
   begin
     if(rst)
